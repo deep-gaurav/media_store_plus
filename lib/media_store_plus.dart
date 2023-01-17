@@ -57,7 +57,7 @@ class MediaStore {
 
     checkDirTypeAndName(dirType: dirType, dirName: dirName);
 
-    if (_sdkInt >= 29) {
+    if ((await getPlatformSDKInt()) >= 29) {
       String fileName = Uri.parse(tempFilePath).pathSegments.last.trim();
       return await MediaStorePlatform.instance.saveFile(
           tempFilePath: tempFilePath,

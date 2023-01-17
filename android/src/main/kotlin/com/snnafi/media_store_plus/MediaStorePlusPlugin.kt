@@ -1,6 +1,7 @@
 package com.snnafi.media_store_plus
 
 import android.app.Activity
+import android.content.Context
 import android.app.RecoverableSecurityException
 import android.content.ContentResolver
 import android.content.ContentValues
@@ -43,6 +44,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
 
     private var activity: FlutterActivity? = null
+    private var context: Context? = null
     private lateinit var channel: MethodChannel
     private lateinit var result: io.flutter.plugin.common.MethodChannel.Result
 
@@ -55,6 +57,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        context = flutterPluginBinding.applicationContext
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "media_store_plus")
         channel.setMethodCallHandler(this)
     }
@@ -275,7 +278,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
 
 
-            val resolver = activity!!.applicationContext.contentResolver
+            val resolver = context!!.contentResolver
             val uri = resolver.insert(collection, values)!!
 
             resolver.openOutputStream(uri).use { os ->
@@ -299,10 +302,11 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         dirType: Int,
         dirName: String
     ): Boolean {
+        Log.d("akudo ", " $displayName, $appFolder, $dirName $dirType" )
         val uri: Uri? = getUriFromDisplayName(displayName, appFolder, dirType, dirName)
         Log.d("DisplayName $displayName", uri.toString())
         if (uri != null) {
-            val resolver: ContentResolver = activity!!.applicationContext.getContentResolver()
+            val resolver: ContentResolver = context!!.getContentResolver()
             val selectionArgs =
                 arrayOf(displayName, dirName + File.separator + appFolder + File.separator)
             resolver.delete(
@@ -335,25 +339,46 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             uri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
         }
 
+        Log.d("akudo ", " uri $uri" )
+
 
         val projection: Array<String>
         projection = arrayOf(MediaStore.MediaColumns._ID)
+
+        Log.d("akudo ", " Got projection" )
         val selectionArgs =
             arrayOf(displayName, dirName + File.separator + appFolder + File.separator)
-        val cursor: Cursor = activity!!.applicationContext.getContentResolver().query(
+
+        Log.d("akudo ", " got selectionArgs" )
+        
+        var appContext = activity?.applicationContext ?: context
+        val isActivityNull = appContext!=null
+        Log.d("akudo ", " $isActivityNull" )
+        
+        val cursorNULL: Cursor? = appContext!!.getContentResolver().query(
             uri,
             projection,
             MediaStore.Audio.Media.DISPLAY_NAME + " =?  AND " + MediaStore.Audio.Media.RELATIVE_PATH + " =? ",
             selectionArgs,
             null
         )!!
+        val isCursorNull = cursorNULL!=null
+        Log.d("akudo ", " $isCursorNull ")
+        
+        val cursor: Cursor = cursorNULL!!
+
+        Log.d("akudo ", " got cursor" )
         cursor.moveToFirst()
         return if (cursor.count > 0) {
+
+            Log.d("akudo ", " cursor > 0" )
             val columnIndex: Int = cursor.getColumnIndex(projection[0])
             val fileId: Long = cursor.getLong(columnIndex)
             cursor.close()
             Uri.parse(uri.toString() + "/" + fileId)
         } else {
+
+        Log.d("akudo ", " cursor count 0" )
             null
         }
 
@@ -362,7 +387,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun uriFromFilePath(path: String): String? {
         try {
             MediaScannerConnection.scanFile(
-                activity!!.applicationContext,
+                context!!,
                 arrayOf(File(path).absolutePath),
                 null
             ) { _, uri ->
@@ -415,7 +440,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val fileUri = Uri.parse(uriString)
         try {
             val contentResolver: ContentResolver =
-                activity!!.applicationContext.getContentResolver()
+                context!!.getContentResolver()
             contentResolver.openFileDescriptor(fileUri, "w")?.use {
                 FileOutputStream(it.fileDescriptor).use { os ->
                     File(path).inputStream().use { it.copyTo(os) }
@@ -442,7 +467,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun deleteFileUsingUri(uriString: String) {
         this.uriString = uriString
         val fileUri = Uri.parse(uriString)
-        val contentResolver: ContentResolver = activity!!.applicationContext.getContentResolver()
+        val contentResolver: ContentResolver = context!!.getContentResolver()
         try {
             DocumentsContract.deleteDocument(contentResolver, fileUri)
             result.success(true)
@@ -464,11 +489,11 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private fun isDeletable(uriString: String): Boolean {
         val uri = Uri.parse(uriString)
-        if (!DocumentsContract.isDocumentUri(activity!!.applicationContext, uri)) {
+        if (!DocumentsContract.isDocumentUri(context!!, uri)) {
             return false
         }
 
-        val contentResolver: ContentResolver = activity!!.applicationContext.getContentResolver()
+        val contentResolver: ContentResolver = context!!.getContentResolver()
         val cursor: Cursor? = contentResolver.query(
             uri,
             arrayOf(DocumentsContract.Document.COLUMN_FLAGS),
@@ -490,11 +515,11 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private fun isWritable(uriString: String): Boolean {
         val uri = Uri.parse(uriString)
-        if (!DocumentsContract.isDocumentUri(activity!!.applicationContext, uri)) {
+        if (!DocumentsContract.isDocumentUri(context!!, uri)) {
             return false
         }
 
-        val contentResolver: ContentResolver = activity!!.applicationContext.getContentResolver()
+        val contentResolver: ContentResolver = context!!.getContentResolver()
         val cursor: Cursor? = contentResolver.query(
             uri,
             arrayOf(DocumentsContract.Document.COLUMN_FLAGS),
@@ -520,7 +545,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val fileUri = Uri.parse(uriString)
         try {
             val contentResolver: ContentResolver =
-                activity!!.applicationContext.getContentResolver()
+                context!!.getContentResolver()
             contentResolver.openInputStream(fileUri)?.use { inputStream ->
                 File(path).outputStream().use {
                     inputStream.copyTo(it)
@@ -566,7 +591,7 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val uri: Uri? = getUriFromDisplayName(name, appFolder, dirType, dirName)
             if (uri != null) {
                 val contentResolver: ContentResolver =
-                    activity!!.applicationContext.getContentResolver()
+                    context!!.getContentResolver()
                 contentResolver.openInputStream(uri)?.use { inputStream ->
                     File(path).outputStream().use {
                         inputStream.copyTo(it)
@@ -594,14 +619,14 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private fun isFileUriExist(uriString: String): Boolean {
         val fileUri = Uri.parse(uriString)
-        return DocumentsContract.isDocumentUri(activity!!.applicationContext, fileUri);
+        return DocumentsContract.isDocumentUri(context!!, fileUri);
     }
 
     private fun getFolderChildren(uriString: String) {
         try {
             val directoryUri = Uri.parse(uriString)
             val documentsTree =
-                DocumentFile.fromTreeUri(activity!!.applicationContext, directoryUri)
+                DocumentFile.fromTreeUri(context!!, directoryUri)
             val children: MutableList<DocumentInfo> = mutableListOf()
             documentsTree?.let {
                 val childDocuments = documentsTree.listFiles()
@@ -664,13 +689,13 @@ class MediaStorePlusPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     uriList.add(directoryUri.toString().trim())
 
 
-                    val contentResolver = activity!!.applicationContext.contentResolver
+                    val contentResolver = context!!.contentResolver
                     val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION or
                             Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                     contentResolver.takePersistableUriPermission(directoryUri, takeFlags)
 
                     val documentsTree =
-                        DocumentFile.fromTreeUri(activity!!.applicationContext, directoryUri)
+                        DocumentFile.fromTreeUri(context!!, directoryUri)
 
                     val children: MutableList<DocumentInfo> = mutableListOf()
                     documentsTree?.let {
